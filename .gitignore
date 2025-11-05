@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# GitHub App keys
+*.pem
+
+# System files
+.DS_Store
+*.log
