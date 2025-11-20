@@ -1,10 +1,13 @@
 // app/api/github/analyze/route.ts
+
+export const runtime = "nodejs";
 import { NextResponse } from 'next/server';
 import { cloneRepo } from '../utils/clonerepo';
 import { detectStack } from '../utils/detectstack';
 import { generateConfigs } from '../utils/generateconfigs';
 import { commitAndPR } from '../utils/githubactions';
-export const runtime = "edge";
+
+import jwt from "jsonwebtoken";
 
 
 export const dynamic = "force-dynamic"; // Important for Vercel server runtime
