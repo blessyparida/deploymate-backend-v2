@@ -20,14 +20,17 @@ const allowedOrigins = [
 
 // CORS Headers (function)
 function corsHeaders(origin: string | null) {
+  const isAllowed =
+    origin?.includes("deploymate-frontend") ||
+    allowedOrigins.includes(origin ?? "");
+
   return {
-    "Access-Control-Allow-Origin": allowedOrigins.includes(origin ?? "")
-      ? origin!
-      : "",
+    "Access-Control-Allow-Origin": isAllowed ? origin! : "*",  // ✔ never empty
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
   };
 }
+
 
 // OPTIONS 🔥 (must exist before POST)
 export function OPTIONS(req: Request) {
