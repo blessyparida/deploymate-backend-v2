@@ -1,22 +1,25 @@
-// app/api/github/analyze/route.ts
+// src/app/api/github/analyze/route.ts
 
 export const runtime = "nodejs";
-import { NextResponse } from "next/server";
-import { cloneRepo } from "../utils/clonerepo";
-import { detectStack } from "../utils/detectstack";
-import { generateConfigs } from "../utils/generateconfigs";
-import { commitAndPR } from "../utils/githubactions";
-import jwt from "jsonwebtoken";
+export const dynamic = "force-dynamic";
 
-export const dynamic = "force-dynamic"; // Important for Vercel server runtime
+import { NextResponse } from 'next/server';
+import { cloneRepo } from '../utils/clonerepo';
+import { detectStack } from '../utils/detectstack';
+import { generateConfigs } from '../utils/generateconfigs';
+import { commitAndPR } from '../utils/githubactions';
 
-// ----- 🔐 ALLOWED ORIGINS -----
+// ----------------------
+// 🛡️ Allowed Origins
+// ----------------------
 const allowedOrigins = [
   "http://localhost:3000",
   "https://deploymate-frontend-959o4z711-blessy-paridas-projects.vercel.app",
 ];
 
-// ----- 🌐 CORS Headers Function -----
+// ----------------------
+// 🛡️ CORS Headers
+// ----------------------
 function corsHeaders(origin: string | null) {
   const isAllowed =
     origin?.includes("deploymate-frontend") ||
@@ -29,7 +32,9 @@ function corsHeaders(origin: string | null) {
   };
 }
 
-// ----- 🧪 OPTIONS → Required for CORS -----
+// ----------------------
+// ⚙️ OPTIONS (MUST EXIST)
+// ----------------------
 export function OPTIONS(req: Request) {
   const origin = req.headers.get("origin");
   return new NextResponse(null, {
@@ -38,29 +43,24 @@ export function OPTIONS(req: Request) {
   });
 }
 
-// ----- 🚀 GET → Simple Health Check -----
-export async function GET() {
-  return NextResponse.json({ message: "API Running 🚀" });
-}
-
-// ----- ⚡ POST → MAIN LOGIC -----
+// ----------------------
+// 🚀 POST – MAIN API
+// ----------------------
 export async function POST(req: Request) {
   try {
     const origin = req.headers.get("origin");
 
-    // ✔ FIXED — CORS Validation Works For ALL Allowed Domains
-    if (origin && !corsHeaders(origin)["Access-Control-Allow-Origin"]) {
+    // ❌ Reject If CORS Not Allowed
+    if (origin && !allowedOrigins.includes(origin ?? "")) {
       return new NextResponse("CORS Error", {
         status: 403,
         headers: corsHeaders(origin),
       });
     }
 
-    // 🔹 Extract repo URL from body
+    // 🧠 Get repoUrl
     const { repoUrl } = await req.json();
     if (!repoUrl) throw new Error("repoUrl is required");
-
-    console.log("📦 Received repoUrl:", repoUrl);
 
     // 1️⃣ Clone Repo
     const { owner, repo, branch, repoDir } = await cloneRepo(repoUrl);
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
     // 2️⃣ Detect Stack
     const detected = detectStack(repoDir);
 
-    // 3️⃣ Generate Config Files
+    // 3️⃣ Generate Files
     const generated = generateConfigs(repoDir, detected);
 
     // 4️⃣ Create PR
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
       generatedFiles: generated,
     });
 
-    // 5️⃣ Respond
+    // 5️⃣ Success Response
     return NextResponse.json(
       {
         success: true,
@@ -99,4 +99,13 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
+}
+
+// TEST GET
+export async function GET() {
+  const headers = corsHeaders("*");
+  return NextResponse.json(
+    { message: "API Running 🚀" },
+    { headers }
+  );
 }
