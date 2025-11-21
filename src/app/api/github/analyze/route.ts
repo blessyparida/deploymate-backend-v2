@@ -1,38 +1,35 @@
 // app/api/github/analyze/route.ts
 
 export const runtime = "nodejs";
-import { NextResponse } from 'next/server';
-import { cloneRepo } from '../utils/clonerepo';
-import { detectStack } from '../utils/detectstack';
-import { generateConfigs } from '../utils/generateconfigs';
-import { commitAndPR } from '../utils/githubactions';
-
+import { NextResponse } from "next/server";
+import { cloneRepo } from "../utils/clonerepo";
+import { detectStack } from "../utils/detectstack";
+import { generateConfigs } from "../utils/generateconfigs";
+import { commitAndPR } from "../utils/githubactions";
 import jwt from "jsonwebtoken";
-
 
 export const dynamic = "force-dynamic"; // Important for Vercel server runtime
 
-// Allowed Origins
+// ----- 🔐 ALLOWED ORIGINS -----
 const allowedOrigins = [
   "http://localhost:3000",
   "https://deploymate-frontend-959o4z711-blessy-paridas-projects.vercel.app",
 ];
 
-// CORS Headers (function)
+// ----- 🌐 CORS Headers Function -----
 function corsHeaders(origin: string | null) {
   const isAllowed =
     origin?.includes("deploymate-frontend") ||
     allowedOrigins.includes(origin ?? "");
 
   return {
-    "Access-Control-Allow-Origin": isAllowed ? origin! : "*",  // ✔ never empty
+    "Access-Control-Allow-Origin": isAllowed ? origin! : "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
   };
 }
 
-
-// OPTIONS 🔥 (must exist before POST)
+// ----- 🧪 OPTIONS → Required for CORS -----
 export function OPTIONS(req: Request) {
   const origin = req.headers.get("origin");
   return new NextResponse(null, {
@@ -41,13 +38,18 @@ export function OPTIONS(req: Request) {
   });
 }
 
-// POST 💥 Main Logic
+// ----- 🚀 GET → Simple Health Check -----
+export async function GET() {
+  return NextResponse.json({ message: "API Running 🚀" });
+}
+
+// ----- ⚡ POST → MAIN LOGIC -----
 export async function POST(req: Request) {
   try {
     const origin = req.headers.get("origin");
 
-    // CORS Validation
-    if (origin&&!allowedOrigins.includes(origin ?? "")) {
+    // ✔ FIXED — CORS Validation Works For ALL Allowed Domains
+    if (origin && !corsHeaders(origin)["Access-Control-Allow-Origin"]) {
       return new NextResponse("CORS Error", {
         status: 403,
         headers: corsHeaders(origin),
@@ -97,9 +99,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-}
-
-// Optional GET for testing 🚀
-export async function GET() {
-  return NextResponse.json({ message: "API Running 🚀" });
 }
