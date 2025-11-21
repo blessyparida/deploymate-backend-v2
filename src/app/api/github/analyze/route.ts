@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     const origin = req.headers.get("origin");
 
     // CORS Validation
-    if (!allowedOrigins.includes(origin ?? "")) {
+    if (origin&&!allowedOrigins.includes(origin ?? "")) {
       return new NextResponse("CORS Error", {
         status: 403,
         headers: corsHeaders(origin),
