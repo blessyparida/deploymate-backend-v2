@@ -26,7 +26,7 @@ function corsHeaders(origin: string | null) {
     allowedOrigins.includes(origin ?? "");
 
   return {
-    "Access-Control-Allow-Origin": isAllowed ? origin! : "*",
+    "Access-Control-Allow-Origin": isAllowed && origin ? origin : "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
   };
@@ -47,10 +47,17 @@ export function OPTIONS(req: Request) {
 // 🚀 POST – MAIN API
 // ----------------------
 export async function POST(req: Request) {
+  let origin: string | null = null;
   try {
-    const origin = req.headers.get("origin");
+    origin = req.headers.get("origin");
 
-    if (origin && !allowedOrigins.includes(origin ?? "")) {
+    // Allow requests with no Origin (e.g., Postman) and explicitly allowed origins.
+    const isAllowed =
+      origin === null ||
+      origin?.includes("deploymate-frontend") ||
+      allowedOrigins.includes(origin ?? "");
+
+    if (!isAllowed) {
       return new NextResponse("CORS Error", {
         status: 403,
         headers: corsHeaders(origin),
@@ -110,13 +117,14 @@ export async function POST(req: Request) {
     console.error("❌ Error in POST:", err);
     return NextResponse.json(
       { success: false, error: err.message },
-      { status: 500 }
+      { status: 500, headers: corsHeaders(origin) }
     );
   }
 }
 
 // TEST GET
-export async function GET() {
-  const headers = corsHeaders("*");
+export async function GET(req: Request) {
+  const origin = req.headers.get("origin");
+  const headers = corsHeaders(origin);
   return NextResponse.json({ message: "API Running 🚀" }, { headers });
 }
