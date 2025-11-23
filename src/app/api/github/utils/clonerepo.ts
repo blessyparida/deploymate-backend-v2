@@ -11,7 +11,10 @@ export async function cloneRepo(repoUrl: string) {
     let branch = "main";
 
     // Honor explicit env var to force API-only mode (useful for deployments)
-    const forceApi = (process.env.FORCE_API_MODE || "").toLowerCase() === "true";
+    // Force API mode if explicitly requested, or if running on Vercel (serverless)
+    const forceApiEnv = (process.env.FORCE_API_MODE || "").toLowerCase() === "true";
+    const runningOnVercel = !!process.env.VERCEL;
+    const forceApi = forceApiEnv || runningOnVercel;
 
     // Check if `git` binary is available in PATH. In many serverless deployments
     // (Vercel, some containers) `git` may not be installed which causes
