@@ -10,17 +10,25 @@ export async function cloneRepo(repoUrl: string) {
     const repo = urlParts[urlParts.length - 1];
     let branch = "main";
 
+    // Honor explicit env var to force API-only mode (useful for deployments)
+    const forceApi = (process.env.FORCE_API_MODE || "").toLowerCase() === "true";
+
     // Check if `git` binary is available in PATH. In many serverless deployments
     // (Vercel, some containers) `git` may not be installed which causes
     // `spawn git ENOENT`. If git is missing we fall back to GitHub API mode.
     let gitAvailable = true;
-    try {
-      const res = child_process.spawnSync("git", ["--version"]);
-      if (res.error || res.status !== 0) {
+    if (forceApi) {
+      gitAvailable = false;
+      console.log("⚠️ FORCE_API_MODE=true — skipping git checks and using API mode");
+    } else {
+      try {
+        const res = child_process.spawnSync("git", ["--version"]);
+        if (res.error || res.status !== 0) {
+          gitAvailable = false;
+        }
+      } catch {
         gitAvailable = false;
       }
-    } catch {
-      gitAvailable = false;
     }
 
     // Use PAT if provided (common for deployments), otherwise fallback to GITHUB_TOKEN
