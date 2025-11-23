@@ -1,10 +1,10 @@
 import fs from "fs";
 import path from "path";
 
-export function generateConfigs(repoDir: string, detected: Record<string, any>) {
+export function generateConfigs(repoDir: string | null, detected: Record<string, any>) {
   const generatedFiles: Record<string, string> = {};
 
-  // ✅ Safe file writer with debugging
+  // ✅ Safe file writer with debugging. If repoDir is null we only keep files in-memory.
   const writeFile = (filename: string, content: any) => {
     try {
       if (typeof content !== "string") {
@@ -12,9 +12,12 @@ export function generateConfigs(repoDir: string, detected: Record<string, any>) 
         throw new Error(`Invalid content type for ${filename}`);
       }
 
-      const filePath = path.join(repoDir, filename);
-      fs.writeFileSync(filePath, content.trim() + "\n");
       generatedFiles[filename] = content;
+
+      if (repoDir) {
+        const filePath = path.join(repoDir, filename);
+        fs.writeFileSync(filePath, content.trim() + "\n");
+      }
     } catch (err) {
       console.error(`❌ Error writing ${filename}:`, err);
       generatedFiles[filename] = `Error: ${(err as Error).message}`;

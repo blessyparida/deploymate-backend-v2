@@ -48,6 +48,7 @@ export function OPTIONS(req: Request) {
 // ----------------------
 export async function POST(req: Request) {
   let origin: string | null = null;
+  let cloneNote: string | null = null;
   try {
     origin = req.headers.get("origin");
 
@@ -68,7 +69,10 @@ export async function POST(req: Request) {
     if (!repoUrl) throw new Error("repoUrl is required");
 
     // 1️⃣ Clone Repo (OR use API mode)
-    const { owner, repo, branch, repoDir, files } = await cloneRepo(repoUrl);
+    const cloneResult = await cloneRepo(repoUrl);
+    const { owner, repo, branch, repoDir, files, note } = cloneResult as any;
+    cloneNote = note || null;
+    if (note) console.log("🔎 cloneRepo note:", note);
 
     // 🧠 Detect stack from local OR API list
     const detected = detectStack(repoDir ?? files);
@@ -81,22 +85,29 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3️⃣ Generate Files — only if local mode
-    let generated = {};
-    if (repoDir) {
-      generated = generateConfigs(repoDir, detected);
-    }
+    // 3️⃣ Generate Files — in-memory or on-disk depending on repoDir
+    const generated = generateConfigs(repoDir ?? null, detected);
 
-    // 4️⃣ Create PR — only if local mode
+    // 4️⃣ Create PR — attempt in API-mode as well if credentials are available
     let prResult = null;
-    if (repoDir) {
-      prResult = await commitAndPR({
-        owner,
-        repo,
-        branch,
-        repoDir,
-        generatedFiles: generated,
-      });
+
+    const canAutoPR = Boolean(
+      process.env.GITHUB_PAT || process.env.GITHUB_APP_ID || process.env.GITHUB_INSTALLATION_ID
+    );
+
+    if (Object.keys(generated).length && canAutoPR) {
+      try {
+        prResult = await commitAndPR({
+          owner,
+          repo,
+          branch,
+          repoDir: repoDir ?? null,
+          generatedFiles: generated,
+        });
+      } catch (err: any) {
+        console.error("❌ PR creation failed:", err);
+        prResult = [{ success: false, error: err.message }];
+      }
     }
 
     // 5️⃣ Success Response
@@ -109,6 +120,7 @@ export async function POST(req: Request) {
         detected,
         generated: repoDir ? Object.keys(generated) : [],
         pullRequest: prResult,
+        cloneNote: note || null,
       },
       { headers: corsHeaders(origin) }
     );
@@ -116,7 +128,12 @@ export async function POST(req: Request) {
   } catch (err: any) {
     console.error("❌ Error in POST:", err);
     return NextResponse.json(
-      { success: false, error: err.message },
+      {
+        success: false,
+        error: err?.message || String(err),
+        errorStack: (err && err.stack) || null,
+        cloneNote: cloneNote || null,
+      },
       { status: 500, headers: corsHeaders(origin) }
     );
   }

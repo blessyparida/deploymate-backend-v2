@@ -7,6 +7,11 @@ import jwt from "jsonwebtoken";
  * 🔐 Auth Helper for GitHub App
  -------------------------- */
 async function getAppOctokit() {
+  // If a PAT is provided via env `GITHUB_PAT`, use it as a fallback.
+  if (process.env.GITHUB_PAT) {
+    return new Octokit({ auth: process.env.GITHUB_PAT });
+  }
+
   const appId = process.env.GITHUB_APP_ID!;
   const installationId = process.env.GITHUB_INSTALLATION_ID!;
   const privateKey = fs.readFileSync(process.env.GITHUB_PRIVATE_KEY_PATH!, "utf8");
@@ -39,7 +44,7 @@ interface CommitPRParams {
   owner: string;
   repo: string;
   branch: string;
-  repoDir: string;
+  repoDir?: string | null;
   generatedFiles: Record<string, string>;
 }
 

@@ -8,7 +8,7 @@ export async function cloneRepo(repoUrl: string) {
     const urlParts = repoUrl.split("/");
     const owner = urlParts[urlParts.length - 2];
     const repo = urlParts[urlParts.length - 1];
-    const branch = "main";
+    let branch = "main";
 
     // Check if `git` binary is available in PATH. In many serverless deployments
     // (Vercel, some containers) `git` may not be installed which causes
@@ -23,7 +23,25 @@ export async function cloneRepo(repoUrl: string) {
       gitAvailable = false;
     }
 
-    const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+    // Use PAT if provided (common for deployments), otherwise fallback to GITHUB_TOKEN
+    const authToken = process.env.GITHUB_PAT || process.env.GITHUB_TOKEN;
+    const octokit = new Octokit({ auth: authToken });
+
+    // Attempt to resolve the repository default branch via GitHub API so we don't
+    // assume "main" (some repos use "master" or other defaults).
+    try {
+      const info = await octokit.repos.get({ owner, repo });
+      if (info && info.data && info.data.default_branch) {
+        branch = info.data.default_branch;
+      }
+    } catch (err) {
+      // If repo info can't be fetched, continue with the default 'main'. The
+      // commit/PR flow will surface a clearer error if the branch doesn't exist.
+      console.warn(
+        "⚠️ Could not fetch repo info to determine default branch:",
+        (err as any)?.message || String(err)
+      );
+    }
 
     // If git is not available, use GitHub API mode (no local clone).
     if (!gitAvailable) {
