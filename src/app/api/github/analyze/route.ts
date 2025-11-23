@@ -50,7 +50,6 @@ export async function POST(req: Request) {
   try {
     const origin = req.headers.get("origin");
 
-    // ❌ Reject If CORS Not Allowed
     if (origin && !allowedOrigins.includes(origin ?? "")) {
       return new NextResponse("CORS Error", {
         status: 403,
@@ -58,40 +57,55 @@ export async function POST(req: Request) {
       });
     }
 
-    // 🧠 Get repoUrl
     const { repoUrl } = await req.json();
     if (!repoUrl) throw new Error("repoUrl is required");
 
-    // 1️⃣ Clone Repo
-    const { owner, repo, branch, repoDir } = await cloneRepo(repoUrl);
+    // 1️⃣ Clone Repo (OR use API mode)
+    const { owner, repo, branch, repoDir, files } = await cloneRepo(repoUrl);
 
-    // 2️⃣ Detect Stack
-    const detected = detectStack(repoDir);
+    // 🧠 Detect stack from local OR API list
+    const detected = detectStack(repoDir ?? files);
 
-    // 3️⃣ Generate Files
-    const generated = generateConfigs(repoDir, detected);
+    // ❌ If no detection possible — stop
+    if (detected.error) {
+      return NextResponse.json(
+        { success: false, error: detected.error },
+        { status: 500, headers: corsHeaders(origin) }
+      );
+    }
 
-    // 4️⃣ Create PR
-    const prResult = await commitAndPR({
-      owner,
-      repo,
-      branch,
-      repoDir,
-      generatedFiles: generated,
-    });
+    // 3️⃣ Generate Files — only if local mode
+    let generated = {};
+    if (repoDir) {
+      generated = generateConfigs(repoDir, detected);
+    }
+
+    // 4️⃣ Create PR — only if local mode
+    let prResult = null;
+    if (repoDir) {
+      prResult = await commitAndPR({
+        owner,
+        repo,
+        branch,
+        repoDir,
+        generatedFiles: generated,
+      });
+    }
 
     // 5️⃣ Success Response
     return NextResponse.json(
       {
         success: true,
+        mode: repoDir ? "local-clone" : "api-mode",
         repo: `${owner}/${repo}`,
         branch,
         detected,
-        generated: Object.keys(generated),
+        generated: repoDir ? Object.keys(generated) : [],
         pullRequest: prResult,
       },
       { headers: corsHeaders(origin) }
     );
+
   } catch (err: any) {
     console.error("❌ Error in POST:", err);
     return NextResponse.json(
@@ -104,8 +118,5 @@ export async function POST(req: Request) {
 // TEST GET
 export async function GET() {
   const headers = corsHeaders("*");
-  return NextResponse.json(
-    { message: "API Running 🚀" },
-    { headers }
-  );
+  return NextResponse.json({ message: "API Running 🚀" }, { headers });
 }
