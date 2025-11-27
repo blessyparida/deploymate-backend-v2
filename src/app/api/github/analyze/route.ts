@@ -3,11 +3,13 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from 'next/server';
-import { cloneRepo } from '../utils/clonerepo';
-import { detectStack } from '../utils/detectstack';
-import { generateConfigs } from '../utils/generateconfigs';
-import { commitAndPR } from '../utils/githubactions';
+import { NextResponse } from "next/server";
+import { cloneRepo } from "../utils/clonerepo";
+import { DetectedStack, DetectStackError } from "../utils/types";
+import { detectStack } from "../utils/detectstack";
+
+import { generateConfigs } from "../utils/generateconfigs";
+import { generateGithubActions } from "../utils/githubactions";
 
 // ----------------------
 // 🛡️ Allowed Origins
@@ -22,8 +24,7 @@ const allowedOrigins = [
 // ----------------------
 function corsHeaders(origin: string | null) {
   const isAllowed =
-    origin?.includes("deploymate-frontend") ||
-    allowedOrigins.includes(origin ?? "");
+    origin?.includes("deploymate-frontend") || allowedOrigins.includes(origin ?? "");
 
   return {
     "Access-Control-Allow-Origin": isAllowed && origin ? origin : "*",
@@ -44,19 +45,30 @@ export function OPTIONS(req: Request) {
 }
 
 // ----------------------
+// 👇 Clone Result Interface
+// ----------------------
+interface CloneResult {
+  owner: string;
+  repo: string;
+  branch: string;
+  repoDir: string | null;
+  files: string[];
+  note?: string;
+}
+
+// ----------------------
 // 🚀 POST – MAIN API
 // ----------------------
 export async function POST(req: Request) {
   let origin: string | null = null;
   let cloneNote: string | null = null;
+
   try {
     origin = req.headers.get("origin");
 
-    // Allow requests with no Origin (e.g., Postman) and explicitly allowed origins.
+    // Allow requests with no Origin (e.g., Postman)
     const isAllowed =
-      origin === null ||
-      origin?.includes("deploymate-frontend") ||
-      allowedOrigins.includes(origin ?? "");
+      origin === null || origin?.includes("deploymate-frontend") || allowedOrigins.includes(origin ?? "");
 
     if (!isAllowed) {
       return new NextResponse("CORS Error", {
@@ -68,36 +80,36 @@ export async function POST(req: Request) {
     const { repoUrl } = await req.json();
     if (!repoUrl) throw new Error("repoUrl is required");
 
-    // 1️⃣ Clone Repo (OR use API mode)
-    const cloneResult = await cloneRepo(repoUrl);
-    const { owner, repo, branch, repoDir, files, note } = cloneResult as any;
+    // 1️⃣ Clone Repo (API or local mode)
+    const cloneResult: CloneResult = await cloneRepo(repoUrl);
+    const { owner, repo, branch, repoDir, files, note } = cloneResult;
     cloneNote = note || null;
     if (note) console.log("🔎 cloneRepo note:", note);
 
-    // 🧠 Detect stack from local OR API list
-    const detected = detectStack(repoDir ?? files);
+    // 🧠 Detect stack
+    const detectedResult = detectStack(files);
 
-    // ❌ If no detection possible — stop
-    if (detected.error) {
+    // ❌ Handle detection errors
+    if ("error" in detectedResult) {
       return NextResponse.json(
-        { success: false, error: detected.error },
+        { success: false, error: detectedResult.error },
         { status: 500, headers: corsHeaders(origin) }
       );
     }
 
-    // 3️⃣ Generate Files — in-memory or on-disk depending on repoDir
+    // ✅ TypeScript-safe detected stack
+    const detected: DetectedStack = detectedResult;
+
+    // 3️⃣ Generate Config Files
     const generated = generateConfigs(repoDir ?? null, detected);
 
-    // 4️⃣ Create PR — attempt in API-mode as well if credentials are available
+    // 4️⃣ Create PR (if credentials available)
     let prResult = null;
-
-    const canAutoPR = Boolean(
-      process.env.GITHUB_PAT || process.env.GITHUB_APP_ID || process.env.GITHUB_INSTALLATION_ID
-    );
+    const canAutoPR = Boolean(process.env.GITHUB_PAT || process.env.GITHUB_APP_ID || process.env.GITHUB_INSTALLATION_ID);
 
     if (Object.keys(generated).length && canAutoPR) {
       try {
-        prResult = await commitAndPR({
+        prResult = await generateGithubActions({
           owner,
           repo,
           branch,
@@ -124,7 +136,6 @@ export async function POST(req: Request) {
       },
       { headers: corsHeaders(origin) }
     );
-
   } catch (err: any) {
     console.error("❌ Error in POST:", err);
     return NextResponse.json(
@@ -139,7 +150,9 @@ export async function POST(req: Request) {
   }
 }
 
+// ----------------------
 // TEST GET
+// ----------------------
 export async function GET(req: Request) {
   const origin = req.headers.get("origin");
   const headers = corsHeaders(origin);
