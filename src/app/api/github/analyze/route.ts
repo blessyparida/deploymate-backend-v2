@@ -33,11 +33,16 @@ function corsHeaders(requestOrigin: string | null) {
     origin.includes("deploymate-frontend");
 
   const headers: Record<string, string> = {
-    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Allow-Credentials": "true",
-    "Vary": "Origin",
-  };
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Credentials": "true",
+  "Vary": "Origin",
+
+  // 👇 THE IMPORTANT ONES FOR GITHUB API
+  "User-Agent": "DeployMate-Backend",   // any name works (must be non-empty)
+  Accept: "application/vnd.github+json",
+};
+
 
   // If allowed → set origin
   if (originIsAllowed) {

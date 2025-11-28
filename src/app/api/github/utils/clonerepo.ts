@@ -28,7 +28,17 @@ export async function cloneRepo(repoUrl: string): Promise<CloneResult> {
 
     // Auth via PAT or token
     const authToken = process.env.GITHUB_PAT || process.env.GITHUB_TOKEN;
-    const octokit = new Octokit({ auth: authToken });
+    console.log("Token exists?", !!authToken);
+    const octokit = new Octokit({
+    auth: authToken,
+    request: {
+    headers: {
+      "User-Agent": "DeployMate-Backend",
+      Accept: "application/vnd.github+json",
+    },
+  },
+});
+
 
     // Fetch default branch from GitHub API
     console.log("Fetching GitHub repo metadata:", { owner, repo, repoUrl });
