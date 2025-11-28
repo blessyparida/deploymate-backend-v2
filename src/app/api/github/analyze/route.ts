@@ -78,6 +78,8 @@ export async function POST(req: Request) {
   let origin: string | null = null;
   let cloneNote: string | null = null;
 
+  
+
   try {
     origin = req.headers.get("origin");
     console.log("🌐 Incoming POST request");
@@ -95,7 +97,9 @@ export async function POST(req: Request) {
     }
 
     const { repoUrl } = await req.json();
-    console.log("📥 repoUrl received:", repoUrl);
+   console.log("🔥 BACKEND HIT — Request received");
+    console.log("Repo URL from body:", repoUrl);
+    console.log("GitHub Token in env exists? ", !!process.env.GITHUB_TOKEN);
     if (!repoUrl) throw new Error("repoUrl is required");
 
     // 1️⃣ Clone Repo
