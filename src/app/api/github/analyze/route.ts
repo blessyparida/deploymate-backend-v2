@@ -16,6 +16,7 @@ import { generateGithubActions } from "../utils/githubactions";
 const allowedOrigins = [
   "http://localhost:3000",
   "https://deploymate-frontend-959o4z711-blessy-paridas-projects.vercel.app",
+    "https://deploymate-frontend.vercel.app", // deployed frontend
 ];
 
 // ----------------------
