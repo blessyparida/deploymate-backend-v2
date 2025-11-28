@@ -35,7 +35,7 @@ export async function cloneRepo(repoUrl: string): Promise<CloneResult> {
     let branch = ""; // start empty
     try {
       const info = await octokit.repos.get({ owner, repo, });
-      branch = info.data.default_branch || branch;
+      branch = info.data.default_branch;
     } catch {
       console.warn("⚠️ Could not fetch default branch. Using 'main'.");
       branch = "main"
