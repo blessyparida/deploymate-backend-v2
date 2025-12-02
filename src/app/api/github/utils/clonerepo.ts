@@ -1,5 +1,6 @@
 // src/app/api/github/utils/clonerepo.ts
 import { Octokit } from "@octokit/rest";
+import { getAppOctokit } from "./githubAuth"; // <— GitHub App auth
 
 export interface CloneResult {
   owner: string;
@@ -11,49 +12,30 @@ export interface CloneResult {
 }
 
 export async function cloneRepo(repoUrl: string): Promise<CloneResult> {
-    console.log("cloneRepo called with repoUrl:", repoUrl);
-    
+  console.log("cloneRepo called with repoUrl:", repoUrl);
+
   try {
-    const urlParts = repoUrl.replace(/:\/\//, '/').split("/").filter(Boolean);
-    // owner is the second-last segment, repo is the last segment
+    const urlParts = repoUrl.replace(/:\/\//, "/").split("/").filter(Boolean);
     const owner = urlParts[urlParts.length - 2];
-    // strip optional trailing .git or trailing slash
     const repoRaw = urlParts[urlParts.length - 1] || "";
     const repo = repoRaw.replace(/\.git$/i, "").replace(/\/$/, "");
-    //let branch = "main";
 
-    const ALWAYS_USE_API =
-      process.env.FORCE_API_MODE?.toLowerCase() === "true" ||
-      process.env.VERCEL === "1";
-
-    // Auth via PAT or token
-    const authToken = process.env.GITHUB_PAT || process.env.GITHUB_TOKEN;
-    console.log("Token exists?", !!authToken);
-    const octokit = new Octokit({
-    auth: authToken,
-    request: {
-    headers: {
-      "User-Agent": "DeployMate-Backend",
-      Accept: "application/vnd.github+json",
-    },
-  },
-});
-
+    // ⚡ Use GitHub App authentication
+    const octokit = await getAppOctokit();
 
     // Fetch default branch from GitHub API
     console.log("Fetching GitHub repo metadata:", { owner, repo, repoUrl });
-    let branch = ""; // start empty
+    let branch = "";
     try {
-      const info = await octokit.repos.get({ owner, repo, });
+      const info = await octokit.repos.get({ owner, repo });
       branch = info.data.default_branch;
     } catch {
       console.warn("⚠️ Could not fetch default branch. Using 'main'.");
-      branch = "main"
+      branch = "main";
     }
     console.log({ owner, repo, branch });
 
-
-    // Always use API mode on Vercel → fetch file list
+    // Fetch repo content
     const { data } = await octokit.repos.getContent({
       owner,
       repo,
