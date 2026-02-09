@@ -1,44 +1,68 @@
 // src/app/api/github/utils/detectstack.ts
 import { DetectedStack, DetectStackError } from "./types";
 
-// Only API-mode: receives list of filenames
-export function detectStack(files: string[] | null): DetectedStack | DetectStackError {
-  if (!files || !files.length) {
+interface DetectStackInput {
+  files: string[] | null;
+  packageJson?: {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  } | null;
+}
+
+export function detectStack({
+  files,
+  packageJson,
+}: DetectStackInput): DetectedStack | DetectStackError {
+  if (!files || files.length === 0) {
     return { error: "No files available. Stack could not be detected." };
   }
 
-  const results: DetectedStack = { languages: [], frameworks: [] };
+  const deps = {
+    ...packageJson?.dependencies,
+    ...packageJson?.devDependencies,
+  };
 
-  // Check package.json
-  const pkgFile = files.find(f => f.endsWith("package.json"));
-  if (pkgFile) {
-    try {
-      // Fetch package.json content via download_url if needed in API mode
-      // Here we just assume dependency names from filenames for simplicity
-      const deps = files.map(f => f.toLowerCase());
+  const stack: DetectedStack = {
+    languages: [],
+    frameworks: [],
+  };
 
-      if (deps.some(d => d.includes("express"))) results.frameworks.push("Express");
-      if (deps.some(d => d.includes("react"))) results.frameworks.push("React");
-      if (deps.some(d => d.includes("next"))) results.frameworks.push("Next");
-      if (deps.some(d => d.includes("vue"))) results.frameworks.push("Vue");
-      if (deps.some(d => d.includes("typescript"))) results.languages.push("TypeScript");
-    } catch {
-      // fallback
+  // ---------- Language detection ----------
+  if (files.some(f => f.endsWith(".ts") || f === "tsconfig.json")) {
+    stack.languages.push("TypeScript");
+  } else {
+    stack.languages.push("JavaScript");
+  }
+
+  if (files.includes("requirements.txt") || files.includes("pyproject.toml")) {
+    stack.languages.push("Python");
+  }
+
+  // ---------- Frontend frameworks ----------
+  if (deps?.react) stack.frameworks.push("React");
+  if (deps?.next) stack.frameworks.push("Next.js");
+  if (deps?.vue) stack.frameworks.push("Vue");
+  if (deps?.svelte) stack.frameworks.push("Svelte");
+
+  // ---------- Backend frameworks ----------
+  if (deps?.express) stack.frameworks.push("Express");
+  if (deps?.fastify) stack.frameworks.push("Fastify");
+  if (deps?.["@nestjs/core"]) stack.frameworks.push("NestJS");
+
+  // ---------- Python frameworks ----------
+  if (files.includes("requirements.txt")) {
+    if (files.some(f => f.toLowerCase().includes("flask"))) {
+      stack.frameworks.push("Flask");
+    }
+    if (files.some(f => f.toLowerCase().includes("fastapi"))) {
+      stack.frameworks.push("FastAPI");
     }
   }
 
-  if (!results.languages.length) results.languages.push("JavaScript");
+  // ---------- Deployment hints ----------
+  if (files.includes("vercel.json")) stack.deployment = "Vercel";
+  else if (files.some(f => f.toLowerCase() === "dockerfile")) stack.deployment = "Docker";
+  else if (files.includes("render.yaml")) stack.deployment = "Render";
 
-  // Python detection
-  if (files.some(f => f.includes("requirements.txt"))) {
-    results.languages.push("Python");
-    if (files.some(f => f.toLowerCase().includes("flask"))) results.frameworks.push("Flask");
-    if (files.some(f => f.toLowerCase().includes("fastapi"))) results.frameworks.push("FastAPI");
-  }
-
-  // Deployment detection
-  if (files.some(f => f.includes("vercel.json"))) results.deployment = "Vercel";
-  else if (files.some(f => f.includes("dockerfile"))) results.deployment = "Docker";
-
-  return results;
+  return stack;
 }

@@ -1,41 +1,35 @@
-// src/app/api/github/utils/clonerepo.ts
-import { Octokit } from "@octokit/rest";
-import { getAppOctokit } from "./githubAuth"; // <— GitHub App auth
+import { Buffer } from "buffer";
+import { getInstallationOctokit } from "./getInstallationOctokit";
 
 export interface CloneResult {
   owner: string;
   repo: string;
   branch: string;
-  repoDir: null; // always null on Vercel
+  repoDir: null;
   files: string[];
+  packageJson: {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  } | null;
   note?: string;
 }
 
-export async function cloneRepo(repoUrl: string): Promise<CloneResult> {
-  console.log("cloneRepo called with repoUrl:", repoUrl);
-
+export async function cloneRepo(
+  repoUrl: string,
+  installationId: number
+): Promise<CloneResult> {
   try {
-    const urlParts = repoUrl.replace(/:\/\//, "/").split("/").filter(Boolean);
-    const owner = urlParts[urlParts.length - 2];
-    const repoRaw = urlParts[urlParts.length - 1] || "";
-    const repo = repoRaw.replace(/\.git$/i, "").replace(/\/$/, "");
+    const parts = repoUrl.replace(/:\/\//, "/").split("/").filter(Boolean);
+    const owner = parts[parts.length - 2];
+    const repo = parts[parts.length - 1].replace(/\.git$/, "");
 
-    // ⚡ Use GitHub App authentication
-    const octokit = await getAppOctokit();
+    const octokit = await getInstallationOctokit({ installationId });
 
-    // Fetch default branch from GitHub API
-    console.log("Fetching GitHub repo metadata:", { owner, repo, repoUrl });
-    let branch = "";
-    try {
-      const info = await octokit.repos.get({ owner, repo });
-      branch = info.data.default_branch;
-    } catch {
-      console.warn("⚠️ Could not fetch default branch. Using 'main'.");
-      branch = "main";
-    }
-    console.log({ owner, repo, branch });
+    // 1️⃣ Get default branch
+    const repoInfo = await octokit.repos.get({ owner, repo });
+    const branch = repoInfo.data.default_branch || "main";
 
-    // Fetch repo content
+    // 2️⃣ Get root files
     const { data } = await octokit.repos.getContent({
       owner,
       repo,
@@ -43,18 +37,37 @@ export async function cloneRepo(repoUrl: string): Promise<CloneResult> {
       ref: branch,
     });
 
-    const fileList = Array.isArray(data) ? data.map((file) => file.name) : [];
+    const files = Array.isArray(data) ? data.map(f => f.name) : [];
+
+    // 3️⃣ Read package.json if present
+    let packageJson = null;
+
+    if (files.includes("package.json")) {
+      const pkgData = await octokit.repos.getContent({
+        owner,
+        repo,
+        path: "package.json",
+        ref: branch,
+      });
+
+      if (!Array.isArray(pkgData.data) && "content" in pkgData.data) {
+        packageJson = JSON.parse(
+          Buffer.from(pkgData.data.content, "base64").toString("utf-8")
+        );
+      }
+    }
 
     return {
       owner,
       repo,
       branch,
       repoDir: null,
-      files: fileList,
+      files,
+      packageJson,
       note: "api-mode",
     };
   } catch (err: any) {
-    console.error("❌ cloneRepo error:", err?.message || err);
-    throw new Error("GitHub repo fetch failed: " + (err?.message || String(err)));
+    console.error("❌ cloneRepo failed:", err);
+    throw new Error(err.message || "GitHub fetch failed");
   }
 }

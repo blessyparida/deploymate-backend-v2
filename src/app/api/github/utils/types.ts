@@ -1,11 +1,9 @@
 // src/app/api/github/utils/types.ts
+
 export interface DetectedStack {
-  languages: string[];      // detected languages, e.g., ['JavaScript', 'TypeScript']
-  frameworks: string[];     // detected frameworks, e.g., ['React', 'Express']
-  frontend?: string;
-  backend?: string;
-  database?: string;
-  deployment?: string;
+  languages: string[];   // e.g. ["JavaScript", "TypeScript"]
+  frameworks: string[];  // e.g. ["React", "Express"]
+  deployment?: string;   // e.g. "Vercel", "Docker", "Render"
 }
 
 export interface DetectStackError {

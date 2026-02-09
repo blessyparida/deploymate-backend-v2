@@ -1,122 +1,120 @@
-// src/app/api/github/analyze/route.ts
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import { Octokit } from "@octokit/rest";
+import { createAppAuth } from "@octokit/auth-app";
+
 import { cloneRepo } from "../utils/clonerepo";
-import { DetectedStack } from "../utils/types";
 import { detectStack } from "../utils/detectstack";
 import { generateConfigs } from "../utils/generateconfigs";
+import { pushFilesToRepo } from "../utils/pushFiles";
 import { generateGithubActions } from "../utils/githubactions";
+import { DetectedStack } from "../utils/types";
 
 // ----------------------
 // 🛡️ Allowed Origins
 // ----------------------
 const allowedOrigins = [
   "http://localhost:3000",
-  "https://deploymate-frontend-959o4z711-blessy-paridas-projects.vercel.app",
-    "https://deploymate-frontend.vercel.app", // deployed frontend
+  "https://deploymate-frontend.vercel.app",
 ];
 
 // ----------------------
 // ⚙️ CORS HEADERS
 // ----------------------
 function corsHeaders(requestOrigin: string | null) {
-  // Normalize + handle undefined origin
   const origin = requestOrigin?.trim().replace(/\/$/, "") ?? null;
 
-  const originIsAllowed =
-    !origin || // allow when origin missing (Postman, mobile Chrome)
+  const allowed =
+    !origin ||
     allowedOrigins.includes(origin) ||
-    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
     origin.includes("deploymate-frontend");
 
   const headers: Record<string, string> = {
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  "Access-Control-Allow-Credentials": "true",
-  "Vary": "Origin",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Credentials": "true",
+    Vary: "Origin",
+  };
 
-  // 👇 THE IMPORTANT ONES FOR GITHUB API
-  "User-Agent": "DeployMate-Backend",   // any name works (must be non-empty)
-  Accept: "application/vnd.github+json",
-};
-
-
-  // If allowed → set origin
-  if (originIsAllowed) {
-    headers["Access-Control-Allow-Origin"] = origin ?? "*"; // fallback
+  if (allowed) {
+    headers["Access-Control-Allow-Origin"] = origin ?? "*";
   }
 
   return headers;
 }
 
+// ----------------------
+// 🔑 Get Installation ID (Option A Core)
+// ----------------------
+async function getInstallationIdForRepo(owner: string, repo: string) {
+  const appId = process.env.GITHUB_APP_ID;
+  const privateKey = process.env.GITHUB_PRIVATE_KEY;
+
+  if (!appId || !privateKey) {
+    throw new Error("GitHub App credentials missing");
+  }
+
+  const appOctokit = new Octokit({
+    authStrategy: createAppAuth,
+    auth: {
+      appId: Number(appId),
+      privateKey,
+    },
+  });
+
+  const res = await appOctokit.request(
+    "GET /repos/{owner}/{repo}/installation",
+    { owner, repo }
+  );
+
+  return res.data.id;
+}
 
 // ----------------------
-// ⚙️ OPTIONS (Preflight)
+// ⚙️ OPTIONS
 // ----------------------
 export function OPTIONS(req: Request) {
-  const origin = req.headers.get("origin");
   return new NextResponse(null, {
     status: 204,
-    headers: corsHeaders(origin),
+    headers: corsHeaders(req.headers.get("origin")),
   });
 }
 
 // ----------------------
-// 👇 Clone Result Interface
-// ----------------------
-interface CloneResult {
-  owner: string;
-  repo: string;
-  branch: string;
-  repoDir: string | null;
-  files: string[];
-  note?: string;
-}
-
-// ----------------------
-// 🚀 POST — MAIN API
+// 🚀 POST
 // ----------------------
 export async function POST(req: Request) {
-  let origin: string | null = null;
-  let cloneNote: string | null = null;
-
-  
+  const origin = req.headers.get("origin");
 
   try {
-    origin = req.headers.get("origin");
-    console.log("🌐 Incoming POST request");
-    console.log("Origin header:", origin);
-    console.log("Headers:", Array.from(req.headers.entries()));
-
-    const isAllowed =
-      origin === null || origin?.includes("deploymate-frontend") || allowedOrigins.includes(origin ?? "");
-
-    if (!isAllowed) {
-      return new NextResponse("CORS Error", {
-        status: 403,
-        headers: corsHeaders(origin),
-      });
-    }
-
     const { repoUrl } = await req.json();
-   console.log("🔥 BACKEND HIT — Request received");
-    console.log("Repo URL from body:", repoUrl);
-    console.log("GitHub Token in env exists? ", !!process.env.GITHUB_PAT);
     if (!repoUrl) throw new Error("repoUrl is required");
 
-    // 1️⃣ Clone Repo
-    const cloneResult: CloneResult = await cloneRepo(repoUrl);
-    const { owner, repo, branch, repoDir, files, note } = cloneResult;
+    // 🔍 Extract owner/repo
+    const cleaned = repoUrl.replace(".git", "");
+    const parts = cleaned.split("/");
+    const owner = parts[parts.length - 2];
+    const repo = parts[parts.length - 1];
 
-    cloneNote = note || null;
-    if (note) console.log("🔎 cloneRepo note:", note);
+    if (!owner || !repo) {
+      throw new Error("Invalid GitHub repository URL");
+    }
 
-    // 2️⃣ Detect Stack — FIXED LINE (IMPORTANT)
-    const detectedResult = detectStack(files);
+    // 🔑 Dynamically fetch installation ID (Option A)
+    const installationId = await getInstallationIdForRepo(owner, repo);
 
+    // 1️⃣ Clone repo via GitHub App
+    const {
+      branch,
+      files,
+      packageJson,
+      note,
+    } = await cloneRepo(repoUrl, installationId);
+
+    // 2️⃣ Detect stack
+    const detectedResult = detectStack({ files, packageJson });
     if ("error" in detectedResult) {
       return NextResponse.json(
         { success: false, error: detectedResult.error },
@@ -126,64 +124,57 @@ export async function POST(req: Request) {
 
     const detected: DetectedStack = detectedResult;
 
-    // 3️⃣ Generate Configs
-    const generated = generateConfigs(repoDir ?? null, detected);
+    // 3️⃣ Generate configs
+    const generatedConfigs = generateConfigs(detected);
 
-    // 4️⃣ Auto PR (if GitHub credentials exist)
-    let prResult = null;
-    const canAutoPR = Boolean(
-      process.env.GITHUB_PAT ||
-        process.env.GITHUB_APP_ID ||
-        process.env.GITHUB_INSTALLATION_ID
-    );
+    // 4️⃣ Push files to repo
+    const pushResult = await pushFilesToRepo({
+      owner,
+      repo,
+      branch,
+      detected,
+      generatedConfigs,
+      installationId,
+    });
 
-    if (Object.keys(generated).length && canAutoPR) {
-      try {
-        prResult = await generateGithubActions({
-          owner,
-          repo,
-          branch,
-          repoDir: repoDir ?? null,
-          generatedFiles: generated,
-        });
-      } catch (err: any) {
-        console.error("❌ PR creation failed:", err);
-        prResult = [{ success: false, error: err.message }];
-      }
-    }
+    // 5️⃣ Create GitHub Actions PR
+    const prResult = await generateGithubActions({
+      owner,
+      repo,
+      branch,
+      installationId,
+      generatedFiles: generatedConfigs as Record<string, any>,
+    });
 
-    // 5️⃣ Success Response
     return NextResponse.json(
       {
         success: true,
-        mode: repoDir ? "local-clone" : "api-mode",
+        mode: "api-mode",
         repo: `${owner}/${repo}`,
         branch,
         detected,
-        generated: repoDir ? Object.keys(generated) : [],
+        generatedConfigs,
+        pushResult,
         pullRequest: prResult,
-        cloneNote,
+        cloneNote: note,
       },
       { headers: corsHeaders(origin) }
     );
   } catch (err: any) {
-    console.error("❌ Error in POST:", err);
+    console.error("❌ analyze error:", err);
     return NextResponse.json(
-      {
-        success: false,
-        error: err?.message || String(err),
-        errorStack: err?.stack || null,
-        cloneNote,
-      },
+      { success: false, error: err.message || "Unknown error" },
       { status: 500, headers: corsHeaders(origin) }
     );
   }
 }
 
 // ----------------------
-// 🧪 TEST GET
+// 🧪 GET
 // ----------------------
 export async function GET(req: Request) {
-  const origin = req.headers.get("origin");
-  return NextResponse.json({ message: "API Running 🚀" }, { headers: corsHeaders(origin) });
+  return NextResponse.json(
+    { message: "API Running 🚀" },
+    { headers: corsHeaders(req.headers.get("origin")) }
+  );
 }

@@ -1,37 +1,48 @@
 // src/app/api/github/utils/generateconfigs.ts
 import { DetectedStack } from "./types";
 
-export function generateConfigs(repoDir: string | null, detected: DetectedStack) {
-  const configs: Record<string, any> = {};
+export type GeneratedConfigs = Record<string, string>;
 
-  // Languages
-  if (detected.languages.includes("JavaScript") || detected.languages.includes("TypeScript")) {
-    configs.eslint = {
-      extends: ["eslint:recommended", "plugin:@typescript-eslint/recommended"]
-    };
-  }
+export function generateConfigs(detected: DetectedStack): GeneratedConfigs {
+  const files: Record<string, string> = {};
 
-  if (detected.languages.includes("Python")) {
-    configs.flake8 = {
-      maxLineLength: 120,
-      ignore: ["E501", "W503"]
-    };
-  }
-
-  // Frameworks
-  if (detected.frameworks.includes("React")) {
-    configs.react = {
-      recommendedPackages: ["react-router-dom", "axios"],
-      fileStructure: ["src/components", "src/pages", "src/context"]
-    };
-  }
-
+  // ---------- Express deployment ----------
   if (detected.frameworks.includes("Express")) {
-    configs.express = {
-      folderStructure: ["routes", "controllers", "middlewares"],
-      devDependencies: ["nodemon", "dotenv"]
-    };
+    files["vercel.json"] = JSON.stringify(
+      {
+        version: 2,
+        builds: [{ src: "index.js", use: "@vercel/node" }],
+        routes: [{ src: "/(.*)", dest: "index.js" }],
+      },
+      null,
+      2
+    );
+
+    files[".env.example"] = `PORT=3000
+# Add your environment variables here
+`;
+
+    files["README_DEPLOY.md"] = `# Deployment Guide
+
+This project was auto-configured for deployment.
+
+## Vercel
+- Entry: index.js
+- Framework: Express
+`;
   }
 
-  return configs;
+  // ---------- React ----------
+  if (detected.frameworks.includes("React")) {
+    files["vercel.json"] = JSON.stringify(
+      {
+        rewrites: [{ source: "/(.*)", destination: "/" }],
+      },
+      null,
+      2
+    );
+  }
+
+  
+  return files;
 }
