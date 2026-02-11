@@ -28,7 +28,7 @@ export async function getAppOctokit(opts?: GetAppOctokitOptions) {
   let installationId: number | undefined =
     opts?.installationId ? Number(opts.installationId) : undefined;
 
-  // Resolve installation ID via repo if not provided
+  
   if (!installationId && opts?.owner && opts?.repo) {
     const appOctokit = new Octokit({
       authStrategy: createAppAuth,

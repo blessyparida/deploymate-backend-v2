@@ -1,4 +1,4 @@
-// src/app/api/github/utils/generateconfigs.ts
+ 
 import { DetectedStack } from "./types";
 
 export type GeneratedConfigs = Record<string, string>;
@@ -6,7 +6,7 @@ export type GeneratedConfigs = Record<string, string>;
 export function generateConfigs(detected: DetectedStack): GeneratedConfigs {
   const files: Record<string, string> = {};
 
-  // ---------- Express deployment ----------
+  
   if (detected.frameworks.includes("Express")) {
     files["vercel.json"] = JSON.stringify(
       {
@@ -32,7 +32,7 @@ This project was auto-configured for deployment.
 `;
   }
 
-  // ---------- React ----------
+  
   if (detected.frameworks.includes("React")) {
     files["vercel.json"] = JSON.stringify(
       {

@@ -25,9 +25,7 @@ export async function generateGithubActions(
   const deploymentBranch = "deploymate-actions";
 
   try {
-    /* --------------------------------------------------
-     * 1️⃣ Ensure deployment branch exists
-     * -------------------------------------------------- */
+    //ensuring deployment branch exists
     let branchExists = true;
 
     try {
@@ -55,12 +53,17 @@ export async function generateGithubActions(
       });
     }
 
-    /* --------------------------------------------------
-     * 2️⃣ Commit generated files
-     * -------------------------------------------------- */
+   
+     //commiting files
     for (const [filePath, rawContent] of Object.entries(generatedFiles)) {
+      const content =
+        typeof rawContent === "string"
+          ? rawContent
+          : JSON.stringify(rawContent, null, 2);
+
       let sha: string | undefined;
 
+      
       try {
         const existing = await octokit.repos.getContent({
           owner,
@@ -73,32 +76,52 @@ export async function generateGithubActions(
           sha = existing.data.sha;
         }
       } catch {
-        // new file
+        
+        sha = undefined;
       }
 
-      const content =
-        typeof rawContent === "string"
-          ? rawContent
-          : JSON.stringify(rawContent, null, 2);
+      try {
+        await octokit.repos.createOrUpdateFileContents({
+          owner,
+          repo,
+          path: filePath,
+          message: `chore: add/update ${filePath} via DeployMate`,
+          content: Buffer.from(content).toString("base64"),
+          branch: deploymentBranch,
+          sha,
+        });
+      } catch (err: any) {
+        
+        if (err.status === 409) {
+          const latest = await octokit.repos.getContent({
+            owner,
+            repo,
+            path: filePath,
+            ref: deploymentBranch,
+          });
 
-      await octokit.repos.createOrUpdateFileContents({
-        owner,
-        repo,
-        path: filePath,
-        message: `chore: add/update ${filePath} via DeployMate`,
-        content: Buffer.from(content).toString("base64"),
-        branch: deploymentBranch,
-        sha,
-      });
+          if (!Array.isArray(latest.data)) {
+            await octokit.repos.createOrUpdateFileContents({
+              owner,
+              repo,
+              path: filePath,
+              message: `chore: add/update ${filePath} via DeployMate`,
+              content: Buffer.from(content).toString("base64"),
+              branch: deploymentBranch,
+              sha: latest.data.sha,
+            });
+          }
+        } else {
+          throw err;
+        }
+      }
     }
 
-    /* --------------------------------------------------
-     * 3️⃣ Check for existing PR
-     * -------------------------------------------------- */
+    
     const existingPRs = await octokit.pulls.list({
       owner,
       repo,
-      head: `${owner}:${deploymentBranch}`, // 🔥 CRITICAL FIX
+      head: `${owner}:${deploymentBranch}`,
       base: branch,
       state: "open",
     });
@@ -113,9 +136,7 @@ export async function generateGithubActions(
       ];
     }
 
-    /* --------------------------------------------------
-     * 4️⃣ Create PR
-     * -------------------------------------------------- */
+    
     const { data: pr } = await octokit.pulls.create({
       owner,
       repo,
@@ -133,7 +154,7 @@ export async function generateGithubActions(
       },
     ];
   } catch (err: any) {
-    console.error("❌ generateGithubActions error:", err);
+    console.error("generateGithubActions error:", err);
     return [
       {
         success: false,

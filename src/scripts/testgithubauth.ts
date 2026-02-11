@@ -7,10 +7,10 @@ const INSTALLATION_ID = process.env.GITHUB_INSTALLATION_ID!;
 const PRIVATE_KEY_PATH = process.env.GITHUB_PRIVATE_KEY_PATH!;
 
 async function main() {
-  // 1️⃣ Load private key
+  //  Load private key
   const privateKey = fs.readFileSync(PRIVATE_KEY_PATH, "utf8");
 
-  // 2️⃣ Create JWT (App authentication)
+  // Create JWT (App authentication)
   const now = Math.floor(Date.now() / 1000);
   const jwtToken = jwt.sign(
     {
@@ -22,28 +22,28 @@ async function main() {
     { algorithm: "RS256" }
   );
 
-  // 3️⃣ Create app-level Octokit instance
+  // Create app-level Octokit instance
   const appOctokit = new Octokit({
     auth: jwtToken,
   });
 
   console.log("✅ GitHub App JWT generated successfully.");
 
-  // 4️⃣ Exchange for installation access token
+  //Exchange for installation access token
   const { data: tokenData } = await appOctokit.apps.createInstallationAccessToken({
     installation_id: Number(INSTALLATION_ID),
   });
 
-  console.log("🔑 Installation Token retrieved:", tokenData.token.slice(0, 10) + "...");
+  console.log("Installation Token retrieved:", tokenData.token.slice(0, 10) + "...");
 
-  // 5️⃣ Test API call using installation token
+  //Test API call using installation token
   const userOctokit = new Octokit({ auth: tokenData.token });
   const { data: repos } = await userOctokit.apps.listReposAccessibleToInstallation();
 
-  console.log(`📦 Accessible repos (${repos.repositories.length}):`);
+  console.log(` Accessible repos (${repos.repositories.length}):`);
   repos.repositories.forEach((r) => console.log("  -", r.full_name));
 }
 
 main().catch((err) => {
-  console.error("❌ Auth test failed:", err.message);
+  console.error(" Auth test failed:", err.message);
 });

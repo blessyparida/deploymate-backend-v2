@@ -25,11 +25,11 @@ export async function cloneRepo(
 
     const octokit = await getInstallationOctokit({ installationId });
 
-    // 1️⃣ Get default branch
+    
     const repoInfo = await octokit.repos.get({ owner, repo });
     const branch = repoInfo.data.default_branch || "main";
 
-    // 2️⃣ Get root files
+    
     const { data } = await octokit.repos.getContent({
       owner,
       repo,
@@ -39,7 +39,7 @@ export async function cloneRepo(
 
     const files = Array.isArray(data) ? data.map(f => f.name) : [];
 
-    // 3️⃣ Read package.json if present
+    
     let packageJson = null;
 
     if (files.includes("package.json")) {
@@ -67,7 +67,7 @@ export async function cloneRepo(
       note: "api-mode",
     };
   } catch (err: any) {
-    console.error("❌ cloneRepo failed:", err);
+    console.error("cloneRepo failed:", err);
     throw new Error(err.message || "GitHub fetch failed");
   }
 }

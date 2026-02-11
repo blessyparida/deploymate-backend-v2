@@ -19,14 +19,14 @@ export async function pushFilesToRepo({
   generatedConfigs,
   installationId,
 }: PushFilesInput) {
-  // 🔐 Authenticate as GitHub App INSTALLATION
+
   const octokit = await getAppOctokit({
     owner,
     repo,
     installationId,
   });
 
-  // 📦 Generate actual files to push
+  //generating files to push
   const filesToPush: Record<string, string> = {};
 
   // ---- vercel.json ----
@@ -63,7 +63,7 @@ NODE_ENV=production
 
   const results: { file: string; success: boolean; error?: string }[] = [];
 
-  // 🚀 Commit each file
+  //Commit each file
   for (const [path, content] of Object.entries(filesToPush)) {
     try {
       let sha: string | undefined;
@@ -80,7 +80,7 @@ NODE_ENV=production
           sha = existing.data.sha;
         }
       } catch {
-        // file does not exist → create new
+        
       }
 
       await octokit.repos.createOrUpdateFileContents({

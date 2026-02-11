@@ -1,4 +1,4 @@
-// src/app/api/github/utils/detectstack.ts
+ 
 import { DetectedStack, DetectStackError } from "./types";
 
 interface DetectStackInput {
@@ -27,7 +27,7 @@ export function detectStack({
     frameworks: [],
   };
 
-  // ---------- Language detection ----------
+  
   if (files.some(f => f.endsWith(".ts") || f === "tsconfig.json")) {
     stack.languages.push("TypeScript");
   } else {
@@ -38,18 +38,18 @@ export function detectStack({
     stack.languages.push("Python");
   }
 
-  // ---------- Frontend frameworks ----------
+  // frontend frameworks
   if (deps?.react) stack.frameworks.push("React");
   if (deps?.next) stack.frameworks.push("Next.js");
   if (deps?.vue) stack.frameworks.push("Vue");
   if (deps?.svelte) stack.frameworks.push("Svelte");
 
-  // ---------- Backend frameworks ----------
+  //backend framework
   if (deps?.express) stack.frameworks.push("Express");
   if (deps?.fastify) stack.frameworks.push("Fastify");
   if (deps?.["@nestjs/core"]) stack.frameworks.push("NestJS");
 
-  // ---------- Python frameworks ----------
+  //py frameworks
   if (files.includes("requirements.txt")) {
     if (files.some(f => f.toLowerCase().includes("flask"))) {
       stack.frameworks.push("Flask");
@@ -59,7 +59,7 @@ export function detectStack({
     }
   }
 
-  // ---------- Deployment hints ----------
+
   if (files.includes("vercel.json")) stack.deployment = "Vercel";
   else if (files.some(f => f.toLowerCase() === "dockerfile")) stack.deployment = "Docker";
   else if (files.includes("render.yaml")) stack.deployment = "Render";
